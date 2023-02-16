@@ -1,0 +1,84 @@
+#include <Wire.h>
+#define I2C_SLAVE_ADDR 0x04
+int High[]={240,384,272,420,295,249};
+int Low[]={4095,4095,4095,4095,4095,4095};
+const int sensor1=2;
+const int sensor2=0;
+const int sensor3=4;
+const int sensor4=14;
+const int sensor5=27;
+const int sensor6=26;
+int s1,s2,s3,s4,s5,s6;
+int leftMotor_speed, rightMotor_speed, servoAngle;
+float e,u;
+float tempE=0;
+float Integral=0;
+float Differential=0;
+const int setpoint=0;
+const int basespeed=200;
+const int centreangle=90;
+const int Kp=0.3;
+const int Ki=0.0005;
+const int Kd=0.18;
+const int Ks=0.2;   //0<k<1
+
+void setup() {
+ Serial.begin(9600);
+ Wire.begin();
+}
+
+void loop() {    
+ 
+ s1=map((analogRead(sensor1)),240,4095,3500,0));
+ s2=map((analogRead(sensor2)),384,4095,3500,0));
+ s3=map((analogRead(sensor3)),272,4095,3500,0));
+ s4=map((analogRead(sensor4)),420,4095,3500,0));
+ s5=map((analogRead(sensor5)),295,4095,3500,0));
+ s6=map((analogRead(sensor6)),249,4095,3500,0));
+ 
+ s1=analogRead(sensor1);
+ s2=analogRead(sensor2);
+ s3=analogRead(sensor3);
+ s4=analogRead(sensor4);
+ s5=analogRead(sensor5);
+ s6=analogRead(sensor6);
+ 
+ e=weightedaverage(s1,s2,s3,s4,s5,s6);
+ u=PID(e);
+ Serial.println(e);
+ servoAngle=centreangle+u;
+ leftMotor_speed=basespeed+(Ks*u);
+ rightMotor_speed=basespeed-(Ks*u);
+ //Transmit_to_arduino(leftMotor_speed, rightMotor_speed, servoAngle);
+}
+
+float weightedaverage(int s1, int s2, int s3, int s4, int s5, int s6)
+{
+ float num = (-38.75*s1) + (-23.25*(s2)) + (-7.75*(s3))+(7.75*(s4))+(23.25*(s5))+(38.75*(s6));
+ float denom=s1+s2+s3+s4+s5+s6;
+ float weightedaverage = num / denom;
+ e=setpoint-weightedaverage;
+ return e;
+ }
+
+float PID(float e)
+{
+  float Time=millis();
+  float deltat=Time-tempT;
+  I ntegral=Integral+(e*deltat);
+  Differential=(e-tempE)/(deltat);
+  u=(Kp*e)+(Ki*Integral)+(Kd*Differential);
+  tempE=e;
+}
+
+void Transmit_to_arduino(int leftMotor_speed, int rightMotor_speed, int servoAngle)
+{
+  Wire.beginTransmission(I2C_SLAVE_ADDR); // transmit to device #4
+  Wire.write((byte)((leftMotor_speed & 0x0000FF00) >> 8));    // first byte of x, containing bits 16 to 9
+  Wire.write((byte)(leftMotor_speed & 0x000000FF));           // second byte of x, containing the 8 LSB - bits 8 to 1
+  Wire.write((byte)((rightMotor_speed & 0x0000FF00) >> 8));   // first byte of y, containing bits 16 to 9
+  Wire.write((byte)(rightMotor_speed & 0x000000FF));          // second byte of y, containing the 8 LSB - bits 8 to 1
+  Wire.write((byte)((servoAngle & 0x0000FF00) >> 8));    // first byte of x, containing bits 16 to 9
+  Wire.write((byte)(servoAngle & 0x000000FF));
+  Wire.endTransmission();   // stop transmitting
+}
